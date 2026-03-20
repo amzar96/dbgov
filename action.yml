@@ -38,7 +38,7 @@ outputs:
 
 runs:
   using: 'docker'
-  image: 'docker://ghcr.io/dbgov/cli:latest'
+  image: 'Dockerfile'
   env:
     DBGOV_ENGINE: ${{ inputs.db_engine }}
     DBGOV_HOST: ${{ inputs.db_host }}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from typing import TYPE_CHECKING
 
@@ -50,6 +51,8 @@ def run_plan(
 
     if should_post_comment():
         post_pr_comment(markdown)
+
+    _set_github_output("plan_summary", markdown)
 
     return markdown
 
@@ -140,3 +143,12 @@ def _log_plan_summary(rows: list[PlanRow]) -> None:
         )
 
     logger.info("Plan summary", grants=grant_count, noops=noop_count, total=len(rows))
+
+
+def _set_github_output(name: str, value: str) -> None:
+    output_file = os.environ.get("GITHUB_OUTPUT")
+    if not output_file:
+        return
+    with open(output_file, "a") as f:
+        delimiter = "EOF_DBGOV"
+        f.write(f"{name}<<{delimiter}\n{value}\n{delimiter}\n")

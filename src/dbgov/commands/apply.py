@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from typing import TYPE_CHECKING
 
@@ -74,7 +75,17 @@ def run_apply(
         failed=failed,
     )
 
+    _set_github_output("grants_applied", str(success_count))
+
     if failed:
         sys.exit(1)
 
     return success_count
+
+
+def _set_github_output(name: str, value: str) -> None:
+    output_file = os.environ.get("GITHUB_OUTPUT")
+    if not output_file:
+        return
+    with open(output_file, "a") as f:
+        f.write(f"{name}={value}\n")
