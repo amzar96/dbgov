@@ -16,3 +16,4 @@ class AppSettings(BaseSettings):
     user: str
     password: str
     options: str = ""
+    sslmode: str = ""

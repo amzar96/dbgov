@@ -29,6 +29,8 @@ class PostgresAdapter(BaseAdapter):
         }
         if self.settings.options:
             kwargs["options"] = self.settings.options
+        if self.settings.sslmode:
+            kwargs["sslmode"] = self.settings.sslmode
         self._conn = psycopg.connect(**kwargs)
 
     def disconnect(self) -> None:

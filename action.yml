@@ -33,6 +33,10 @@ inputs:
     description: 'Extra libpq options param (e.g. reference=<project-ref> for Supabase pooler)'
     required: false
     default: ''
+  db_sslmode:
+    description: 'SSL mode (disable, allow, prefer, require, verify-ca, verify-full)'
+    required: false
+    default: ''
 
 outputs:
   grants_applied:
@@ -51,6 +55,7 @@ runs:
     DBGOV_USER: ${{ inputs.db_user }}
     DBGOV_PASSWORD: ${{ inputs.db_password }}
     DBGOV_OPTIONS: ${{ inputs.db_options }}
+    DBGOV_SSLMODE: ${{ inputs.db_sslmode }}
     GITHUB_TOKEN: ${{ github.token }}
   args:
     - ${{ inputs.command }}

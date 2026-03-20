@@ -1,6 +1,6 @@
 [project]
 name = "dbgov"
-version = "0.0.3"
+version = "0.0.4"
 requires-python = ">=3.12"
 description = "Database Access Governance — manage DB permissions as code"
 
