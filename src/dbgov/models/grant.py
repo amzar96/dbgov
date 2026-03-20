@@ -3,6 +3,15 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 
+class CreatePrincipalSpec(BaseModel):
+    model_config = {"frozen": True}
+
+    name: str
+    type: str = "user"
+    password: str | None = None
+    options: list[str] = []
+
+
 class GrantSpec(BaseModel):
     model_config = {"frozen": True}
 

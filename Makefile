@@ -1,4 +1,4 @@
-.PHONY: install dev lint format typecheck check hooks clean run-plan run-apply docker-build docker-plan docker-apply test test-up test-down test-parser
+.PHONY: install dev lint format typecheck check validate hooks clean run-plan run-apply docker-build docker-plan docker-apply test test-up test-down test-parser
 
 install:
 	uv sync
@@ -18,6 +18,8 @@ typecheck:
 	uv run ty check src/
 
 check: lint typecheck
+
+validate: lint format typecheck test
 
 hooks:
 	uv run prek run --all-files

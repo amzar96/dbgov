@@ -7,12 +7,12 @@ from typing import TYPE_CHECKING
 from dbgov.adapters.factory import get_adapter
 from dbgov.logging import logger
 from dbgov.models.grant import PlanRow
-from dbgov.parser.policy import parse_policy_file, parse_policy_glob
+from dbgov.parser.policy import ParsedPolicies, parse_file, parse_glob
 from dbgov.reporter.pr_comment import post_pr_comment, should_post_comment
 
 if TYPE_CHECKING:
     from dbgov.adapters.base import BaseAdapter
-    from dbgov.models.grant import GrantSpec
+    from dbgov.models.grant import CreatePrincipalSpec, GrantSpec
     from dbgov.settings.config import AppSettings
 
 
@@ -20,10 +20,10 @@ def run_plan(
     policy_path: str,
     settings: AppSettings,
 ) -> str:
-    specs = _resolve_specs(policy_path)
+    parsed = _resolve_policies(policy_path)
 
-    if not specs:
-        logger.warning("No grant specs found in policy file(s)")
+    if not parsed.grants and not parsed.principals:
+        logger.warning("No specs found in policy file(s)")
         return ""
 
     logger.info("Starting plan", engine=settings.engine, policy_path=policy_path)
@@ -33,18 +33,11 @@ def run_plan(
             logger.error("Failed to connect to database")
             sys.exit(1)
 
-        for spec in specs:
-            if not adapter.principal_exists(spec.db_principal):
-                logger.error(
-                    "Principal does not exist in database",
-                    principal=spec.db_principal,
-                )
-                sys.exit(1)
+        principal_rows = _diff_principals(adapter, parsed.principals)
+        plan_rows = _diff_permissions(adapter, parsed.grants)
 
-        plan_rows = _diff_permissions(adapter, specs)
-
-    markdown = _format_plan_markdown(plan_rows)
-    _log_plan_summary(plan_rows)
+    markdown = _format_plan_markdown(principal_rows, plan_rows)
+    _log_plan_summary(principal_rows, plan_rows)
 
     if should_post_comment():
         post_pr_comment(markdown)
@@ -52,6 +45,26 @@ def run_plan(
     _set_github_output("plan_summary", markdown)
 
     return markdown
+
+
+def _diff_principals(
+    adapter: BaseAdapter,
+    specs: list[CreatePrincipalSpec],
+) -> list[PlanRow]:
+    rows: list[PlanRow] = []
+    for spec in specs:
+        exists = adapter.principal_exists(spec.name)
+        action = "NO-OP" if exists else "CREATE"
+        rows.append(
+            PlanRow(
+                action=action,
+                principal=spec.name,
+                schema_name="—",
+                table="—",
+                privilege=f"type={spec.type}",
+            )
+        )
+    return rows
 
 
 def _diff_permissions(
@@ -104,32 +117,57 @@ def _diff_permissions(
     return rows
 
 
-def _format_plan_markdown(rows: list[PlanRow]) -> str:
-    lines = [
-        "## 🔐 DBGov Plan\n",
-        "| Action | Principal | Schema | Table | Privilege |",
-        "|--------|-----------|--------|-------|-----------|",
-    ]
-    for row in rows:
+def _format_plan_markdown(
+    principal_rows: list[PlanRow],
+    grant_rows: list[PlanRow],
+) -> str:
+    lines = ["## 🔐 DBGov Plan\n"]
+
+    if principal_rows:
+        lines.extend(
+            [
+                "### Principals\n",
+                "| Action | Principal | Type |",
+                "|--------|-----------|------|",
+            ]
+        )
+        for row in principal_rows:
+            icon = "🆕" if row.action == "CREATE" else "➖"  # noqa: RUF001
+            lines.append(f"| {icon} {row.action} | {row.principal} | {row.privilege} |")
+        lines.append("")
+
+    lines.extend(
+        [
+            "### Grants\n",
+            "| Action | Principal | Schema | Table | Privilege |",
+            "|--------|-----------|--------|-------|-----------|",
+        ]
+    )
+    for row in grant_rows:
         icon = "✅" if row.action == "GRANT" else "➖"  # noqa: RUF001
         lines.append(
             f"| {icon} {row.action} | {row.principal} | {row.schema_name} "
             f"| {row.table} | {row.privilege} |"
         )
 
-    grant_count = sum(1 for r in rows if r.action == "GRANT")
-    noop_count = sum(1 for r in rows if r.action == "NO-OP")
-    lines.append(f"\n**{grant_count} grant(s)** to apply, **{noop_count} no-op(s)**.")
+    create_count = sum(1 for r in principal_rows if r.action == "CREATE")
+    grant_count = sum(1 for r in grant_rows if r.action == "GRANT")
+    noop_count = sum(1 for r in principal_rows + grant_rows if r.action == "NO-OP")
+    lines.append(
+        f"\n**{create_count} principal(s)** to create, "
+        f"**{grant_count} grant(s)** to apply, "
+        f"**{noop_count} no-op(s)**."
+    )
     lines.append("\nReady to apply on merge.")
 
     return "\n".join(lines)
 
 
-def _log_plan_summary(rows: list[PlanRow]) -> None:
-    grant_count = sum(1 for r in rows if r.action == "GRANT")
-    noop_count = sum(1 for r in rows if r.action == "NO-OP")
-
-    for row in rows:
+def _log_plan_summary(
+    principal_rows: list[PlanRow],
+    grant_rows: list[PlanRow],
+) -> None:
+    for row in principal_rows + grant_rows:
         logger.info(
             "Plan row",
             action=row.action,
@@ -139,20 +177,31 @@ def _log_plan_summary(rows: list[PlanRow]) -> None:
             privilege=row.privilege,
         )
 
-    logger.info("Plan summary", grants=grant_count, noops=noop_count, total=len(rows))
+    create_count = sum(1 for r in principal_rows if r.action == "CREATE")
+    grant_count = sum(1 for r in grant_rows if r.action == "GRANT")
+    noop_count = sum(1 for r in principal_rows + grant_rows if r.action == "NO-OP")
+    logger.info(
+        "Plan summary",
+        creates=create_count,
+        grants=grant_count,
+        noops=noop_count,
+        total=len(principal_rows) + len(grant_rows),
+    )
 
 
-def _resolve_specs(policy_path: str) -> list[GrantSpec]:
-    """Resolve policy path to grant specs — supports globs and space-separated file lists."""
+def _resolve_policies(policy_path: str) -> ParsedPolicies:
+    """Resolve policy path — supports globs and space-separated file lists."""
     if "*" in policy_path or "?" in policy_path:
-        return parse_policy_glob(policy_path)
+        return parse_glob(policy_path)
     paths = policy_path.split()
     if len(paths) > 1:
-        specs: list[GrantSpec] = []
+        result = ParsedPolicies()
         for p in paths:
-            specs.extend(parse_policy_file(p))
-        return specs
-    return parse_policy_file(policy_path)
+            parsed = parse_file(p)
+            result.principals.extend(parsed.principals)
+            result.grants.extend(parsed.grants)
+        return result
+    return parse_file(policy_path)
 
 
 def _set_github_output(name: str, value: str) -> None:

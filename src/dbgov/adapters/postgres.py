@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import psycopg
-from psycopg.sql import SQL, Identifier
+from psycopg.sql import SQL, Identifier, Literal
 
 from dbgov.adapters.base import BaseAdapter
 from dbgov.logging import logger
-from dbgov.models.grant import AdapterResult, GrantSpec, PermissionRecord
+from dbgov.models.grant import AdapterResult, CreatePrincipalSpec, GrantSpec, PermissionRecord
 
 if TYPE_CHECKING:
     from dbgov.settings.config import AppSettings
@@ -52,6 +52,39 @@ class PostgresAdapter(BaseAdapter):
             (db_principal,),
         ).fetchone()
         return row is not None
+
+    def create_principal(self, spec: CreatePrincipalSpec) -> AdapterResult:
+        sql_statements: list[str] = []
+        try:
+            assert self._conn
+            if self.principal_exists(spec.name):
+                logger.info("Principal already exists, skipping", principal=spec.name)
+                return AdapterResult(success=True, executed_sql=[])
+
+            # Build: CREATE ROLE <name> [WITH PASSWORD 'xxx'] [LOGIN] [...]
+            options_sql = " ".join(spec.options)
+            if spec.password:
+                # Use psycopg Literal for safe escaping
+                escaped_pw = Literal(spec.password)
+                stmt = SQL("CREATE ROLE {} WITH PASSWORD {} {}").format(
+                    Identifier(spec.name), escaped_pw, SQL(options_sql)
+                )
+            else:
+                stmt = SQL("CREATE ROLE {} {}").format(Identifier(spec.name), SQL(options_sql))
+
+            self._conn.execute(stmt)
+            # Log without the actual password
+            log_msg = (
+                f"CREATE ROLE {spec.name} WITH PASSWORD '***' {options_sql}"
+                if spec.password
+                else f"CREATE ROLE {spec.name} {options_sql}"
+            )
+            sql_statements.append(log_msg)
+            _log_sql(log_msg)
+
+            return AdapterResult(success=True, executed_sql=sql_statements)
+        except Exception as exc:
+            return AdapterResult(success=False, executed_sql=sql_statements, error=str(exc))
 
     def grant(self, spec: GrantSpec) -> AdapterResult:
         sql_statements: list[str] = []

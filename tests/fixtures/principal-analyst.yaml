@@ -1,0 +1,12 @@
+apiVersion: dbgov/v1
+kind: Principal
+metadata:
+  name: create-analyst-user
+spec:
+  name: analyst_user
+  type: user
+  password:
+    strategy: fromEnv
+    envVar: TEST_USER_PASSWORD
+  options:
+    - LOGIN

@@ -6,7 +6,7 @@ import pymysql  # type: ignore[import-untyped]
 
 from dbgov.adapters.base import BaseAdapter
 from dbgov.logging import logger
-from dbgov.models.grant import AdapterResult, GrantSpec, PermissionRecord
+from dbgov.models.grant import AdapterResult, CreatePrincipalSpec, GrantSpec, PermissionRecord
 
 if TYPE_CHECKING:
     from dbgov.settings.config import AppSettings
@@ -46,6 +46,30 @@ class MySQLAdapter(BaseAdapter):
                 (db_principal,),
             )
             return cur.fetchone() is not None
+
+    def create_principal(self, spec: CreatePrincipalSpec) -> AdapterResult:
+        sql_statements: list[str] = []
+        try:
+            if self.principal_exists(spec.name):
+                logger.info("Principal already exists, skipping", principal=spec.name)
+                return AdapterResult(success=True, executed_sql=[])
+
+            with self._conn.cursor() as cur:
+                if spec.password:
+                    sql = f"CREATE USER '{_qs(spec.name)}'@'%' IDENTIFIED BY %s"
+                    cur.execute(sql, (spec.password,))
+                    log_msg = f"CREATE USER '{spec.name}'@'%' IDENTIFIED BY '***'"
+                else:
+                    sql = f"CREATE ROLE '{_qs(spec.name)}'"
+                    cur.execute(sql)
+                    log_msg = sql
+
+                sql_statements.append(log_msg)
+                _log_sql(log_msg)
+
+            return AdapterResult(success=True, executed_sql=sql_statements)
+        except Exception as exc:
+            return AdapterResult(success=False, executed_sql=sql_statements, error=str(exc))
 
     def grant(self, spec: GrantSpec) -> AdapterResult:
         sql_statements: list[str] = []

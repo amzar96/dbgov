@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from types import TracebackType
 
-    from dbgov.models.grant import AdapterResult, GrantSpec, PermissionRecord
+    from dbgov.models.grant import AdapterResult, CreatePrincipalSpec, GrantSpec, PermissionRecord
     from dbgov.settings.config import AppSettings
 
 
@@ -31,6 +31,9 @@ class BaseAdapter(ABC):
 
     @abstractmethod
     def disconnect(self) -> None: ...
+
+    @abstractmethod
+    def create_principal(self, spec: CreatePrincipalSpec) -> AdapterResult: ...
 
     @abstractmethod
     def grant(self, spec: GrantSpec) -> AdapterResult: ...

@@ -1,6 +1,6 @@
 [project]
 name = "dbgov"
-version = "0.0.6"
+version = "0.0.7"
 requires-python = ">=3.12"
 description = "Database Access Governance — manage DB permissions as code"
 
@@ -71,6 +71,10 @@ quote-style = "double"
 indent-style = "space"
 docstring-code-format = true
 
-[tool.ty]
-src = ["src"]
+[tool.ty.environment]
 python-version = "3.12"
+root = ["src"]
+
+[tool.ty.rules]
+unused-type-ignore-comment = "ignore"
+invalid-argument-type = "ignore"

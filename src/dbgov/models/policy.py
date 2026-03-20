@@ -5,8 +5,44 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-class PolicyMetadata(BaseModel):
+class DocumentMetadata(BaseModel):
     name: str
+
+
+class PasswordSpec(BaseModel):
+    strategy: Literal["fromEnv", "randomize", "none"] = "none"
+    env_var: str | None = Field(default=None, alias="envVar")
+
+    model_config = {"populate_by_name": True}
+
+    @model_validator(mode="after")
+    def validate_env_var(self) -> PasswordSpec:
+        if self.strategy == "fromEnv" and not self.env_var:
+            raise ValueError("envVar is required when strategy is 'fromEnv'")
+        return self
+
+
+class PrincipalSpec(BaseModel):
+    name: str
+    type: Literal["user", "role"] = "user"
+    password: PasswordSpec = PasswordSpec()
+    options: list[str] = []
+
+
+class PrincipalDocument(BaseModel):
+    api_version: str = Field(alias="apiVersion")
+    kind: Literal["Principal"]
+    metadata: DocumentMetadata
+    spec: PrincipalSpec
+
+    model_config = {"populate_by_name": True}
+
+    @field_validator("api_version")
+    @classmethod
+    def validate_api_version(cls, v: str) -> str:
+        if not v.startswith("dbgov/"):
+            raise ValueError(f"Unsupported apiVersion: {v}")
+        return v
 
 
 class PolicyPrincipal(BaseModel):
@@ -50,8 +86,10 @@ class PolicySpec(BaseModel):
 class PolicyDocument(BaseModel):
     api_version: str = Field(alias="apiVersion")
     kind: Literal["AccessPolicy"]
-    metadata: PolicyMetadata
+    metadata: DocumentMetadata
     spec: PolicySpec
+
+    model_config = {"populate_by_name": True}
 
     @field_validator("api_version")
     @classmethod
