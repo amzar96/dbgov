@@ -1,0 +1,53 @@
+name: 'DBGov — Database Access Governance'
+description: 'Apply database access policies as code'
+author: 'dbgov'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  command:
+    description: 'plan | apply'
+    required: true
+    default: 'plan'
+  policy_file:
+    description: 'Path to policy YAML or glob'
+    required: false
+    default: './policies/*.yaml'
+  db_engine:
+    description: 'postgres | redshift | mysql | mariadb'
+    required: true
+  db_host:
+    required: true
+  db_port:
+    required: false
+    default: '5432'
+  db_name:
+    required: true
+  db_user:
+    required: true
+  db_password:
+    required: true
+
+outputs:
+  grants_applied:
+    description: 'Number of grants successfully applied'
+  plan_summary:
+    description: 'Markdown summary of planned changes'
+
+runs:
+  using: 'docker'
+  image: 'docker://ghcr.io/dbgov/cli:latest'
+  env:
+    DBGOV_ENGINE: ${{ inputs.db_engine }}
+    DBGOV_HOST: ${{ inputs.db_host }}
+    DBGOV_PORT: ${{ inputs.db_port }}
+    DBGOV_NAME: ${{ inputs.db_name }}
+    DBGOV_USER: ${{ inputs.db_user }}
+    DBGOV_PASSWORD: ${{ inputs.db_password }}
+    GITHUB_TOKEN: ${{ github.token }}
+  args:
+    - ${{ inputs.command }}
+    - --file
+    - ${{ inputs.policy_file }}

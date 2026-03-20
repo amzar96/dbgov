@@ -1,0 +1,76 @@
+[project]
+name = "dbgov"
+version = "0.1.0"
+requires-python = ">=3.12"
+description = "Database Access Governance — manage DB permissions as code"
+
+dependencies = [
+    "typer>=0.12",
+    "pyyaml>=6.0",
+    "psycopg[binary]>=3.2",
+    "redshift-connector>=2.1",
+    "pymysql[rsa]>=1.1",
+    "httpx>=0.27",
+    "loguru>=0.7",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+]
+
+[project.scripts]
+dbgov = "dbgov.__main__:app"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11",
+    "ty>=0.0.1a7",
+    "prek>=0.3",
+    "pytest>=8.0",
+]
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dbgov"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "N",
+    "UP",
+    "B",
+    "SIM",
+    "TCH",
+    "RUF",
+]
+ignore = [
+    "E501",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dbgov"]
+force-single-line = false
+combine-as-imports = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[tool.ty]
+src = ["src"]
+python-version = "3.12"
