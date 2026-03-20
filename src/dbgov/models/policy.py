@@ -45,6 +45,27 @@ class PrincipalDocument(BaseModel):
         return v
 
 
+class RoleBindingSpec(BaseModel):
+    role: str
+    members: list[str]
+
+
+class RoleBindingDocument(BaseModel):
+    api_version: str = Field(alias="apiVersion")
+    kind: Literal["RoleBinding"]
+    metadata: DocumentMetadata
+    spec: RoleBindingSpec
+
+    model_config = {"populate_by_name": True}
+
+    @field_validator("api_version")
+    @classmethod
+    def validate_api_version(cls, v: str) -> str:
+        if not v.startswith("dbgov/"):
+            raise ValueError(f"Unsupported apiVersion: {v}")
+        return v
+
+
 class PolicyPrincipal(BaseModel):
     name: str
     type: str = "user"

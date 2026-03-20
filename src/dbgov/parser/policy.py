@@ -8,16 +8,15 @@ from pathlib import Path
 
 import yaml  # type: ignore[import-untyped]
 
-from dbgov.models.grant import CreatePrincipalSpec, GrantSpec
-from dbgov.models.policy import PolicyDocument, PrincipalDocument
+from dbgov.models.grant import CreatePrincipalSpec, GrantSpec, RoleMembershipSpec
+from dbgov.models.policy import PolicyDocument, PrincipalDocument, RoleBindingDocument
 
 
 class ParsedPolicies:
-    """Container for parsed principals and grant specs."""
-
     def __init__(self) -> None:
         self.principals: list[CreatePrincipalSpec] = []
         self.grants: list[GrantSpec] = []
+        self.role_bindings: list[RoleMembershipSpec] = []
 
 
 def parse_policy_file(path: str | Path) -> list[GrantSpec]:
@@ -44,6 +43,11 @@ def parse_file(path: str | Path) -> ParsedPolicies:
     elif kind == "AccessPolicy":
         policy_doc = PolicyDocument.model_validate(doc)
         result.grants.extend(_policy_doc_to_specs(policy_doc))
+    elif kind == "RoleBinding":
+        rb_doc = RoleBindingDocument.model_validate(doc)
+        result.role_bindings.append(
+            RoleMembershipSpec(role=rb_doc.spec.role, members=rb_doc.spec.members)
+        )
     else:
         raise ValueError(f"Unknown document kind: {kind}")
 
@@ -67,6 +71,7 @@ def parse_glob(pattern: str) -> ParsedPolicies:
         parsed = parse_file(file_path)
         result.principals.extend(parsed.principals)
         result.grants.extend(parsed.grants)
+        result.role_bindings.extend(parsed.role_bindings)
     return result
 
 

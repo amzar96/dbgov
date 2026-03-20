@@ -6,7 +6,13 @@ import pymysql  # type: ignore[import-untyped]
 
 from dbgov.adapters.base import BaseAdapter
 from dbgov.logging import logger
-from dbgov.models.grant import AdapterResult, CreatePrincipalSpec, GrantSpec, PermissionRecord
+from dbgov.models.grant import (
+    AdapterResult,
+    CreatePrincipalSpec,
+    GrantSpec,
+    PermissionRecord,
+    RoleMembershipSpec,
+)
 
 if TYPE_CHECKING:
     from dbgov.settings.config import AppSettings
@@ -192,6 +198,28 @@ class MySQLAdapter(BaseAdapter):
                 )
                 for row in cur.fetchall()
             ]
+
+    def role_members(self, role: str) -> list[str]:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "SELECT TO_USER FROM mysql.role_edges WHERE FROM_USER = %s",
+                (role,),
+            )
+            return [row[0] for row in cur.fetchall()]
+
+    def grant_role(self, spec: RoleMembershipSpec) -> AdapterResult:
+        sql_statements: list[str] = []
+        try:
+            with self._conn.cursor() as cur:
+                for member in spec.members:
+                    stmt = f"GRANT {_qi(spec.role)} TO {_qi(member)}@'%'"
+                    cur.execute(stmt)
+                    sql_statements.append(stmt)
+                    _log_sql(stmt)
+            self._conn.commit()
+            return AdapterResult(success=True, executed_sql=sql_statements)
+        except Exception as exc:
+            return AdapterResult(success=False, executed_sql=sql_statements, error=str(exc))
 
 
 def _qi(identifier: str) -> str:

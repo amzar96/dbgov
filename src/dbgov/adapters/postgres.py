@@ -7,7 +7,13 @@ from psycopg.sql import SQL, Identifier, Literal
 
 from dbgov.adapters.base import BaseAdapter
 from dbgov.logging import logger
-from dbgov.models.grant import AdapterResult, CreatePrincipalSpec, GrantSpec, PermissionRecord
+from dbgov.models.grant import (
+    AdapterResult,
+    CreatePrincipalSpec,
+    GrantSpec,
+    PermissionRecord,
+    RoleMembershipSpec,
+)
 
 if TYPE_CHECKING:
     from dbgov.settings.config import AppSettings
@@ -282,6 +288,31 @@ class PostgresAdapter(BaseAdapter):
             )
             for row in rows
         ]
+
+    def role_members(self, role: str) -> list[str]:
+        assert self._conn
+        rows = self._conn.execute(
+            "SELECT m.rolname FROM pg_auth_members am "
+            "JOIN pg_roles r ON r.oid = am.roleid "
+            "JOIN pg_roles m ON m.oid = am.member "
+            "WHERE r.rolname = %s",
+            (role,),
+        ).fetchall()
+        return [row[0] for row in rows]
+
+    def grant_role(self, spec: RoleMembershipSpec) -> AdapterResult:
+        sql_statements: list[str] = []
+        try:
+            assert self._conn
+            for member in spec.members:
+                stmt = SQL("GRANT {} TO {}").format(Identifier(spec.role), Identifier(member))
+                self._conn.execute(stmt)
+                rendered = stmt.as_string(self._conn)
+                sql_statements.append(rendered)
+                _log_sql(rendered)
+            return AdapterResult(success=True, executed_sql=sql_statements)
+        except Exception as exc:
+            return AdapterResult(success=False, executed_sql=sql_statements, error=str(exc))
 
 
 def _log_sql(sql: str) -> None:

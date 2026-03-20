@@ -6,7 +6,13 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from types import TracebackType
 
-    from dbgov.models.grant import AdapterResult, CreatePrincipalSpec, GrantSpec, PermissionRecord
+    from dbgov.models.grant import (
+        AdapterResult,
+        CreatePrincipalSpec,
+        GrantSpec,
+        PermissionRecord,
+        RoleMembershipSpec,
+    )
     from dbgov.settings.config import AppSettings
 
 
@@ -50,6 +56,12 @@ class BaseAdapter(ABC):
 
     @abstractmethod
     def principal_exists(self, db_principal: str) -> bool: ...
+
+    @abstractmethod
+    def role_members(self, role: str) -> list[str]: ...
+
+    @abstractmethod
+    def grant_role(self, spec: RoleMembershipSpec) -> AdapterResult: ...
 
     @abstractmethod
     def test_connection(self) -> bool: ...

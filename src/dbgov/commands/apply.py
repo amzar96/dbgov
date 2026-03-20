@@ -18,7 +18,7 @@ def run_apply(
 ) -> int:
     parsed = _resolve_policies(policy_path)
 
-    if not parsed.grants and not parsed.principals:
+    if not parsed.grants and not parsed.principals and not parsed.role_bindings:
         logger.warning("No specs found in policy file(s)")
         return 0
 
@@ -57,7 +57,19 @@ def run_apply(
                 )
                 sys.exit(1)
 
-        # Step 3: Apply grants
+        # Step 3: Apply role bindings
+        for spec in parsed.role_bindings:
+            logger.info("Applying role binding", role=spec.role, members=spec.members)
+            result = adapter.grant_role(spec)
+            if result.success:
+                logger.info(
+                    "Role binding applied", role=spec.role, sql_count=len(result.executed_sql)
+                )
+            else:
+                failed = True
+                logger.error("Role binding failed", role=spec.role, error=result.error)
+
+        # Step 4: Apply grants
         for spec in parsed.grants:
             logger.info(
                 "Granting privileges",
@@ -111,6 +123,7 @@ def _resolve_policies(policy_path: str) -> ParsedPolicies:
             parsed = parse_file(p)
             result.principals.extend(parsed.principals)
             result.grants.extend(parsed.grants)
+            result.role_bindings.extend(parsed.role_bindings)
         return result
     return parse_file(policy_path)
 

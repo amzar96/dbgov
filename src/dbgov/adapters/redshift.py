@@ -6,7 +6,13 @@ import redshift_connector  # type: ignore[import-untyped]
 
 from dbgov.adapters.base import BaseAdapter
 from dbgov.logging import logger
-from dbgov.models.grant import AdapterResult, GrantSpec, PermissionRecord
+from dbgov.models.grant import (
+    AdapterResult,
+    CreatePrincipalSpec,
+    GrantSpec,
+    PermissionRecord,
+    RoleMembershipSpec,
+)
 
 if TYPE_CHECKING:
     from dbgov.settings.config import AppSettings
@@ -214,6 +220,50 @@ class RedshiftAdapter(BaseAdapter):
             )
             executed.extend(self._revoke_schema_level(cur, schema_spec))
         return executed
+
+    def create_principal(self, spec: CreatePrincipalSpec) -> AdapterResult:
+        sql_statements: list[str] = []
+        try:
+            if self.principal_exists(spec.name):
+                logger.info("Principal already exists, skipping", principal=spec.name)
+                return AdapterResult(success=True, executed_sql=[])
+            options_sql = " ".join(spec.options)
+            if spec.password:
+                stmt = f"CREATE USER {_qi(spec.name)} PASSWORD '***' {options_sql}"
+                real_stmt = f"CREATE USER {_qi(spec.name)} PASSWORD '{spec.password}' {options_sql}"
+            else:
+                stmt = f"CREATE USER {_qi(spec.name)} {options_sql}"
+                real_stmt = stmt
+            with self._conn.cursor() as cur:
+                cur.execute(real_stmt)
+            sql_statements.append(stmt)
+            _log_sql(stmt)
+            return AdapterResult(success=True, executed_sql=sql_statements)
+        except Exception as exc:
+            return AdapterResult(success=False, executed_sql=sql_statements, error=str(exc))
+
+    def role_members(self, role: str) -> list[str]:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "SELECT u.usename FROM pg_user u "
+                "JOIN pg_group g ON u.usesysid = ANY(g.grolist) "
+                "WHERE g.groname = %s",
+                (role,),
+            )
+            return [row[0] for row in cur.fetchall()]
+
+    def grant_role(self, spec: RoleMembershipSpec) -> AdapterResult:
+        sql_statements: list[str] = []
+        try:
+            with self._conn.cursor() as cur:
+                for member in spec.members:
+                    stmt = f"ALTER GROUP {_qi(spec.role)} ADD USER {_qi(member)}"
+                    cur.execute(stmt)
+                    sql_statements.append(stmt)
+                    _log_sql(stmt)
+            return AdapterResult(success=True, executed_sql=sql_statements)
+        except Exception as exc:
+            return AdapterResult(success=False, executed_sql=sql_statements, error=str(exc))
 
     def list_permissions(
         self,

@@ -12,7 +12,7 @@ from dbgov.reporter.pr_comment import post_pr_comment, should_post_comment
 
 if TYPE_CHECKING:
     from dbgov.adapters.base import BaseAdapter
-    from dbgov.models.grant import CreatePrincipalSpec, GrantSpec
+    from dbgov.models.grant import CreatePrincipalSpec, GrantSpec, RoleMembershipSpec
     from dbgov.settings.config import AppSettings
 
 
@@ -22,7 +22,7 @@ def run_plan(
 ) -> str:
     parsed = _resolve_policies(policy_path)
 
-    if not parsed.grants and not parsed.principals:
+    if not parsed.grants and not parsed.principals and not parsed.role_bindings:
         logger.warning("No specs found in policy file(s)")
         return ""
 
@@ -35,9 +35,10 @@ def run_plan(
 
         principal_rows = _diff_principals(adapter, parsed.principals)
         plan_rows = _diff_permissions(adapter, parsed.grants)
+        binding_rows = _diff_role_bindings(adapter, parsed.role_bindings)
 
-    markdown = _format_plan_markdown(principal_rows, plan_rows)
-    _log_plan_summary(principal_rows, plan_rows)
+    markdown = _format_plan_markdown(principal_rows, plan_rows, binding_rows)
+    _log_plan_summary(principal_rows, plan_rows, binding_rows)
 
     if should_post_comment():
         post_pr_comment(markdown)
@@ -117,9 +118,31 @@ def _diff_permissions(
     return rows
 
 
+def _diff_role_bindings(
+    adapter: BaseAdapter,
+    specs: list[RoleMembershipSpec],
+) -> list[PlanRow]:
+    rows: list[PlanRow] = []
+    for spec in specs:
+        current_members = set(adapter.role_members(spec.role))
+        for member in spec.members:
+            action = "NO-OP" if member in current_members else "GRANT"
+            rows.append(
+                PlanRow(
+                    action=action,
+                    principal=member,
+                    schema_name="—",
+                    table="—",
+                    privilege=f"MEMBER OF {spec.role}",
+                )
+            )
+    return rows
+
+
 def _format_plan_markdown(
     principal_rows: list[PlanRow],
     grant_rows: list[PlanRow],
+    binding_rows: list[PlanRow] | None = None,
 ) -> str:
     lines = ["## 🔐 DBGov Plan\n"]
 
@@ -150,12 +173,27 @@ def _format_plan_markdown(
             f"| {row.table} | {row.privilege} |"
         )
 
+    if binding_rows:
+        lines.extend(
+            [
+                "\n### Role Bindings\n",
+                "| Action | Member | Role |",
+                "|--------|--------|------|",
+            ]
+        )
+        for row in binding_rows:
+            icon = "✅" if row.action == "GRANT" else "➖"  # noqa: RUF001
+            lines.append(f"| {icon} {row.action} | {row.principal} | {row.privilege} |")
+
+    all_rows = principal_rows + grant_rows + (binding_rows or [])
     create_count = sum(1 for r in principal_rows if r.action == "CREATE")
     grant_count = sum(1 for r in grant_rows if r.action == "GRANT")
-    noop_count = sum(1 for r in principal_rows + grant_rows if r.action == "NO-OP")
+    binding_count = sum(1 for r in (binding_rows or []) if r.action == "GRANT")
+    noop_count = sum(1 for r in all_rows if r.action == "NO-OP")
     lines.append(
         f"\n**{create_count} principal(s)** to create, "
         f"**{grant_count} grant(s)** to apply, "
+        f"**{binding_count} binding(s)** to apply, "
         f"**{noop_count} no-op(s)**."
     )
     lines.append("\nReady to apply on merge.")
@@ -166,8 +204,9 @@ def _format_plan_markdown(
 def _log_plan_summary(
     principal_rows: list[PlanRow],
     grant_rows: list[PlanRow],
+    binding_rows: list[PlanRow] | None = None,
 ) -> None:
-    for row in principal_rows + grant_rows:
+    for row in principal_rows + grant_rows + (binding_rows or []):
         logger.info(
             "Plan row",
             action=row.action,
@@ -177,15 +216,18 @@ def _log_plan_summary(
             privilege=row.privilege,
         )
 
+    all_rows = principal_rows + grant_rows + (binding_rows or [])
     create_count = sum(1 for r in principal_rows if r.action == "CREATE")
     grant_count = sum(1 for r in grant_rows if r.action == "GRANT")
-    noop_count = sum(1 for r in principal_rows + grant_rows if r.action == "NO-OP")
+    binding_count = sum(1 for r in (binding_rows or []) if r.action == "GRANT")
+    noop_count = sum(1 for r in all_rows if r.action == "NO-OP")
     logger.info(
         "Plan summary",
         creates=create_count,
         grants=grant_count,
+        bindings=binding_count,
         noops=noop_count,
-        total=len(principal_rows) + len(grant_rows),
+        total=len(all_rows),
     )
 
 

@@ -12,6 +12,13 @@ class CreatePrincipalSpec(BaseModel):
     options: list[str] = []
 
 
+class RoleMembershipSpec(BaseModel):
+    model_config = {"frozen": True}
+
+    role: str
+    members: list[str]
+
+
 class GrantSpec(BaseModel):
     model_config = {"frozen": True}
 
