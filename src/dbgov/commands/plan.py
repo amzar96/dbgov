@@ -20,10 +20,7 @@ def run_plan(
     policy_path: str,
     settings: AppSettings,
 ) -> str:
-    if "*" in policy_path or "?" in policy_path:
-        specs = parse_policy_glob(policy_path)
-    else:
-        specs = parse_policy_file(policy_path)
+    specs = _resolve_specs(policy_path)
 
     if not specs:
         logger.warning("No grant specs found in policy file(s)")
@@ -143,6 +140,19 @@ def _log_plan_summary(rows: list[PlanRow]) -> None:
         )
 
     logger.info("Plan summary", grants=grant_count, noops=noop_count, total=len(rows))
+
+
+def _resolve_specs(policy_path: str) -> list[GrantSpec]:
+    """Resolve policy path to grant specs — supports globs and space-separated file lists."""
+    if "*" in policy_path or "?" in policy_path:
+        return parse_policy_glob(policy_path)
+    paths = policy_path.split()
+    if len(paths) > 1:
+        specs: list[GrantSpec] = []
+        for p in paths:
+            specs.extend(parse_policy_file(p))
+        return specs
+    return parse_policy_file(policy_path)
 
 
 def _set_github_output(name: str, value: str) -> None:

@@ -9,6 +9,7 @@ from dbgov.logging import logger
 from dbgov.parser.policy import parse_policy_file, parse_policy_glob
 
 if TYPE_CHECKING:
+    from dbgov.models.grant import GrantSpec
     from dbgov.settings.config import AppSettings
 
 
@@ -16,10 +17,7 @@ def run_apply(
     policy_path: str,
     settings: AppSettings,
 ) -> int:
-    if "*" in policy_path or "?" in policy_path:
-        specs = parse_policy_glob(policy_path)
-    else:
-        specs = parse_policy_file(policy_path)
+    specs = _resolve_specs(policy_path)
 
     if not specs:
         logger.warning("No grant specs found in policy file(s)")
@@ -81,6 +79,19 @@ def run_apply(
         sys.exit(1)
 
     return success_count
+
+
+def _resolve_specs(policy_path: str) -> list[GrantSpec]:
+    """Resolve policy path to grant specs — supports globs and space-separated file lists."""
+    if "*" in policy_path or "?" in policy_path:
+        return parse_policy_glob(policy_path)
+    paths = policy_path.split()
+    if len(paths) > 1:
+        specs: list[GrantSpec] = []
+        for p in paths:
+            specs.extend(parse_policy_file(p))
+        return specs
+    return parse_policy_file(policy_path)
 
 
 def _set_github_output(name: str, value: str) -> None:
