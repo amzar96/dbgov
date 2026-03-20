@@ -35,6 +35,6 @@ class PlanRow(BaseModel):
 
     action: str
     principal: str
-    schema: str
+    schema_name: str
     table: str
     privilege: str

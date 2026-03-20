@@ -81,7 +81,7 @@ def _diff_permissions(
                         PlanRow(
                             action=action,
                             principal=spec.db_principal,
-                            schema=spec.schema_name,
+                            schema_name=spec.schema_name,
                             table=table,
                             privilege=priv,
                         )
@@ -98,7 +98,7 @@ def _diff_permissions(
                     PlanRow(
                         action=action,
                         principal=spec.db_principal,
-                        schema=spec.schema_name,
+                        schema_name=spec.schema_name,
                         table=table_label,
                         privilege=priv,
                     )
@@ -116,7 +116,7 @@ def _format_plan_markdown(rows: list[PlanRow]) -> str:
     for row in rows:
         icon = "✅" if row.action == "GRANT" else "➖"  # noqa: RUF001
         lines.append(
-            f"| {icon} {row.action} | {row.principal} | {row.schema} "
+            f"| {icon} {row.action} | {row.principal} | {row.schema_name} "
             f"| {row.table} | {row.privilege} |"
         )
 
@@ -137,7 +137,7 @@ def _log_plan_summary(rows: list[PlanRow]) -> None:
             "Plan row",
             action=row.action,
             principal=row.principal,
-            schema=row.schema,
+            schema=row.schema_name,
             table=row.table,
             privilege=row.privilege,
         )
