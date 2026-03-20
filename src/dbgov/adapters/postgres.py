@@ -19,14 +19,17 @@ class PostgresAdapter(BaseAdapter):
         self._conn: psycopg.Connection | None = None
 
     def connect(self) -> None:
-        self._conn = psycopg.connect(
-            host=self.settings.host,
-            port=self.settings.port,
-            dbname=self.settings.name,
-            user=self.settings.user,
-            password=self.settings.password,
-            autocommit=True,
-        )
+        kwargs: dict[str, str | int | bool] = {
+            "host": self.settings.host,
+            "port": self.settings.port,
+            "dbname": self.settings.name,
+            "user": self.settings.user,
+            "password": self.settings.password,
+            "autocommit": True,
+        }
+        if self.settings.options:
+            kwargs["options"] = self.settings.options
+        self._conn = psycopg.connect(**kwargs)
 
     def disconnect(self) -> None:
         if self._conn and not self._conn.closed:

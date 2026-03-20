@@ -15,3 +15,4 @@ class AppSettings(BaseSettings):
     name: str
     user: str
     password: str
+    options: str = ""

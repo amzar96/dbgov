@@ -29,6 +29,10 @@ inputs:
     required: true
   db_password:
     required: true
+  db_options:
+    description: 'Extra libpq options param (e.g. reference=<project-ref> for Supabase pooler)'
+    required: false
+    default: ''
 
 outputs:
   grants_applied:
@@ -46,6 +50,7 @@ runs:
     DBGOV_NAME: ${{ inputs.db_name }}
     DBGOV_USER: ${{ inputs.db_user }}
     DBGOV_PASSWORD: ${{ inputs.db_password }}
+    DBGOV_OPTIONS: ${{ inputs.db_options }}
     GITHUB_TOKEN: ${{ github.token }}
   args:
     - ${{ inputs.command }}
